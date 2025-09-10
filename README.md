@@ -1,5 +1,4 @@
-
-# dma\_bot\_rust
+# dma_bot_rust
 
 DMA (Direct Market Access)
 
@@ -16,6 +15,7 @@ A fast, async **crypto trading engine** written in Rust. It streams **multi-symb
 * [Quick Start](#quick-start)
 * [Configuration Examples](#configuration-examples)
 * [What You’ll See](#what-youll-see)
+* [Prometheus & Grafana Setup](#prometheus--grafana-setup)
 * [Prometheus/Grafana Cheats](#prometheusgrafana-cheats)
 * [Strategies](#strategies)
 * [Recording (JSONL)](#recording-jsonl)
@@ -32,23 +32,30 @@ A fast, async **crypto trading engine** written in Rust. It streams **multi-symb
 
   * Mock tick generator (high-rate random walk)
   * Binance Spot: **Testnet** (sandbox) or **Mainnet** (bookTicker WS + REST trading + User Data Stream)
+
 * **Strategies** (mix & match, N workers each)
 
   * Mean Reversion
   * Moving Average Crossover
   * Volatility Breakout
+
 * **Risk**: price bands, notional cap, QPS throttle
+
 * **SOR/Router**: multi-venue scoring & fan-out
+
 * **Gateways**
 
   * Mock (ACK → Filled after latency)
   * Binance (REST + userDataStream WS)
+
 * **Positions/PnL**: per-venue inventory, realized & unrealized PnL
+
 * **Observability**
 
   * Prometheus metrics on `:9898` (built-in HTTP server)
   * Config visibility (feed/venue modes, strategies, symbols)
   * WS health (connected, reconnects, last event age)
+
 * **Recorder**: append-only JSONL (`Event::Md/Sig/Ord/Exec`) for audit
 
 ---
@@ -79,62 +86,39 @@ All buses are Tokio channels; components run as async tasks.
 
 **OpenSSL build errors?** Either:
 
-* Install system deps: `sudo apt install pkg-config libssl-dev`, **or**
-* Use `reqwest` with **rustls** (recommended) in `Cargo.toml`:
+```bash
+sudo apt install pkg-config libssl-dev
+```
 
-  ```toml
-  reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-  urlencoding = "2"
-  ```
+Or use `reqwest` with **rustls**:
+
+```toml
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+```
 
 ---
 
 ## Environment & Presets
 
-The app loads **`.env`** at startup (via `dotenvy`). Three presets are included:
+App loads `.env` at startup via `dotenvy`.
 
-* **`.env.mock`** – safe local **simulation**: mock market data + mock gateway.
-* **`.env.sandbox`** – **Binance Testnet**: real WS feed + REST trading on testnet (no real money).
-* **`.env.mainnet`** – **Binance Mainnet**: live markets & live orders. **Use with care.**
+Presets:
 
-**How loading works**
+* `.env.mock` → simulation
+* `.env.sandbox` → Binance testnet
+* `.env.mainnet` → Binance mainnet
 
-* The app reads **`.env`** in the current directory.
-* Process env vars override `.env` values, e.g.:
-
-  ```bash
-  MAX_QPS=5 RUST_LOG=debug cargo run
-  ```
-
-**Switching presets**
+Switch preset:
 
 ```bash
-# 1) MOCK (recommended for dev)
 cp .env.mock .env
-cargo run
-
-# 2) BINANCE SANDBOX (requires keys)
-cp .env.sandbox .env
-# edit .env to set BINANCE_API_KEY / BINANCE_API_SECRET
-cargo run
-
-# 3) BINANCE MAINNET (live trading – careful!)
-cp .env.mainnet .env
-# set real BINANCE_API_KEY / BINANCE_API_SECRET
-# verify MAX_NOTIONAL, PX_MIN/PX_MAX, MAX_QPS
 cargo run
 ```
 
-No-copy alternatives:
+or:
 
 ```bash
-# Source a preset just for this run
-set -a; source .env.sandbox; set +a; cargo run
-
-# Or symlink
-ln -sf .env.mock .env        # switch to mock
-ln -sf .env.sandbox .env     # switch to sandbox
-ln -sf .env.mainnet .env     # switch to mainnet
+ln -sf .env.sandbox .env
 cargo run
 ```
 
@@ -144,7 +128,7 @@ cargo run
 
 ```bash
 cargo build
-cp .env.mock .env      # or pick another preset
+cp .env.mock .env
 cargo run
 ```
 
@@ -157,218 +141,230 @@ metrics listening on http://0.0.0.0:9898/ (and /metrics)
 Check metrics:
 
 ```bash
-curl -s localhost:9898/metrics | head -n 50
+curl -s localhost:9898/metrics | head -n 20
 ```
 
 ---
 
 ## Configuration Examples
 
-### `.env.mock` (default safe mode)
+### `.env.mock`
 
 ```env
 FEED_MODE=mock
 VENUE_MODE=mock
-
 SYMBOLS=BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT
 SYMBOL=BTCUSDT
-
-MAX_NOTIONAL=2000000000
-PX_MIN=1000
-PX_MAX=200000
-MAX_QPS=50
-
-# Single: STRATEGY=ma_crossover
-# Multi:
 STRATEGIES=mean_reversion,ma_crossover,vol_breakout
 STRATEGY_WORKERS=2
-
 METRICS_PORT=9898
 RUST_LOG=info
-RECORD_FILE=events_mockup.jsonl
+RECORD_FILE=events_mock.jsonl
 ```
 
-### `.env.sandbox` (Binance Testnet)
+### `.env.sandbox`
 
 ```env
 FEED_MODE=binance_sandbox
 VENUE_MODE=binance_sandbox
-
 BINANCE_WS_URL=wss://testnet.binance.vision/ws
 BINANCE_REST_URL=https://testnet.binance.vision
 BINANCE_API_KEY=your_testnet_key
 BINANCE_API_SECRET=your_testnet_secret
-BINANCE_RECV_WINDOW=5000
-
 SYMBOLS=BTCUSDT,ETHUSDT
 SYMBOL=BTCUSDT
-
 STRATEGIES=mean_reversion
 STRATEGY_WORKERS=2
-
 METRICS_PORT=9898
 RUST_LOG=info
-RECORD_FILE=events_testnet.jsonl
 ```
 
-### `.env.mainnet` (Binance Mainnet — **at your own risk**)
+### `.env.mainnet`
+
+⚠️ **Risk: live trading**
 
 ```env
 FEED_MODE=binance_mainnet
 VENUE_MODE=binance_mainnet
-
 BINANCE_WS_URL=wss://stream.binance.com:9443/ws
 BINANCE_REST_URL=https://api.binance.com
 BINANCE_API_KEY=your_mainnet_key
 BINANCE_API_SECRET=your_mainnet_secret
-BINANCE_RECV_WINDOW=5000
-
 SYMBOLS=BTCUSDT,ETHUSDT
 SYMBOL=BTCUSDT
-
 STRATEGIES=ma_crossover
 STRATEGY_WORKERS=1
-
 METRICS_PORT=9898
 RUST_LOG=info
-RECORD_FILE=events_mainnet.jsonl
 ```
-
-> **Safety:** Start with **mock** or **sandbox**. Apply conservative limits (notional, price bands, QPS).
 
 ---
 
 ## What You’ll See
 
-**Startup log**
+* **Metrics**:
+  `exec_reports_total`, `inventory_total_qty`, `latency_signal_to_ack_ms_bucket`
+* **Events JSONL**:
+  written to `events_*.jsonl`
+* **Prometheus scraping**:
+  `http://localhost:9090/targets` shows job `dma_bot_rust` UP
 
-```
-startup config feed_mode=mock venue_mode=mock symbols=["BTCUSDT","ETHUSDT",...]
-strategies=["mean_reversion","ma_crossover","vol_breakout"] workers_per_strategy=2 ...
-recorder enabled path=events_mockup.jsonl
-```
+---
 
-**Metrics endpoint**
+## Prometheus & Grafana Setup
 
-```bash
-curl -s localhost:9898/metrics | egrep '^config_|^ticks_total|^exec_reports_total'
-```
-
-**Event recorder**
+### Install Prometheus
 
 ```bash
-ls -l events_mockup.jsonl
-tail -n 5 events_mockup.jsonl
+sudo apt install prometheus promtool
 ```
+
+Config `/etc/prometheus/prometheus.yml`:
+
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'dma_bot_rust'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:9898']
+```
+
+Check & restart:
+
+```bash
+sudo promtool check config /etc/prometheus/prometheus.yml
+sudo systemctl restart prometheus
+```
+
+---
+
+### Install Grafana
+
+```bash
+sudo apt install grafana
+sudo systemctl enable grafana-server
+sudo systemctl start grafana-server
+```
+
+Open: [http://localhost:3000](http://localhost:3000)
+Login: `admin / admin` (change password)
+
+---
+
+### Connect Grafana to Prometheus
+
+* **Connections → Data sources → Add data source**
+* Choose **Prometheus**
+* URL: `http://localhost:9090`
+* Save & Test → must be green
+
+---
+
+### Import Dashboard
+
+1. Grafana → **Dashboards → Import**
+2. Paste provided JSON (see `grafana_dma_bot_dashboard.json`)
+3. Select datasource = Prometheus
+4. Import
+
+You’ll get panels for:
+
+* Exec reports rate (`ack`, `filled`)
+* Latency p50/p90/p95/p99
+* Inventory per venue & total
+* Active strategies / symbols
+* Health & scrape duration
 
 ---
 
 ## Prometheus/Grafana Cheats
 
-* Feed coverage per symbol
+* Fill rate per venue
 
-  ```promql
-  rate(ticks_total_by_symbol[5m])
-  ```
-* Strategy activity per symbol
+```promql
+rate(exec_reports_total{status="filled"}[1m]) by (venue)
+```
 
-  ```promql
-  rate(signals_total_by[5m]) by (strategy, symbol)
-  ```
-* Venue fill-rate
+* Inventory snapshot
 
-  ```promql
-  (rate(exec_reports_total{status="filled"}[10m])
-   / ignoring(status) group_left()
-   rate(exec_reports_total{status="ack"}[10m])) by (venue)
-  ```
-* WS health (Binance)
+```promql
+inventory_qty
+```
 
-  * `binance_ws_connected{venue="binance"}`
-  * `binance_ws_last_event_age_seconds{venue="binance"}`
-  * `binance_ws_reconnects_total{venue="binance"}`
+* Latency quantile
+
+```promql
+histogram_quantile(0.95, sum(rate(latency_signal_to_ack_ms_bucket[5m])) by (le))
+```
 
 ---
 
 ## Strategies
 
-* **Mean Reversion**
-  Buy when ask ≪ rolling mean − edge; sell when bid ≫ mean + edge. Good in ranging markets.
-* **MA Crossover**
-  Signals when fast SMA crosses slow SMA (with min edge & cooldown). Trend-following.
-* **Volatility Breakout**
-  Breaks out of rolling high/low ± edge with cooldown. Momentum-oriented.
-
-Enable any subset via `STRATEGIES` and scale with `STRATEGY_WORKERS`.
+* Mean Reversion → range trading
+* MA Crossover → trend following
+* Volatility Breakout → momentum
 
 ---
 
 ## Recording (JSONL)
 
-Set `RECORD_FILE=/path/events.jsonl` to enable.
-Each line is one `Event` (`Md`, `Sig`, `Ord`, `Exec`) — great for audits, offline sims, and debugging fills vs signals.
+Enable recorder:
+
+```env
+RECORD_FILE=events.jsonl
+```
+
+Each line = `Event` (Md, Sig, Ord, Exec).
 
 ---
 
 ## Troubleshooting
 
-* **No `events_*.jsonl` file**
-
-  * Ensure `.env` is loaded (run from repo root).
-  * Look for “recorder enabled path=…”.
-  * Try an absolute path: `RECORD_FILE=/tmp/events.jsonl`.
-
-* **Only one symbol seems active**
-
-  * Positions run per symbol. Verify via:
-
-    ```
-    curl -s localhost:9898/metrics | grep '^inventory_qty{symbol='
-    ```
-  * Ensure `SYMBOLS=BTCUSDT,ETHUSDT,...` has no stray spaces.
-
-* **OpenSSL build error**
-
-  * `sudo apt install pkg-config libssl-dev`, or use `reqwest` with `rustls-tls`.
-
-* **Latency histogram empty**
-
-  * Add instrumentation mapping signal/order timestamps to ACK, then `LAT_SIG_ACK.observe(delta_ms)`.
+* **No data in Grafana** → check data source URL = `http://localhost:9090` (not `:9898/metrics`).
+* **Config error in Prometheus** → run `promtool check config`.
+* **Latency histogram empty** → instrumentation may not emit samples yet.
 
 ---
 
 ## Project Layout
 
-* `src/main.rs` — task wiring, buses, spawns
-* `src/config.rs` — env parsing (modes, symbols, strategies)
-* `src/feed.rs` — mock & Binance bookTicker WS
-* `src/strategy.rs` — 3 strategies
-* `src/risk.rs` — acceptance, bands, notional, QPS
-* `src/router.rs` — scoring & fan-out to venues
-* `src/gateway.rs` — mock gateway (ACK → FILLED)
-* `src/gateway_binance.rs` — REST trading + userDataStream
-* `src/positions.rs` — inventory/PnL tracker
-* `src/metrics.rs` — Prometheus registry & HTTP server
+* `src/main.rs` — task wiring
+* `src/feed.rs` — mock & Binance feed
+* `src/strategy.rs` — strategies
+* `src/risk.rs` — limits
+* `src/router.rs` — order routing
+* `src/gateway.rs` — mock gateway
+* `src/gateway_binance.rs` — Binance REST + WS
+* `src/positions.rs` — PnL tracker
+* `src/metrics.rs` — Prometheus exporter
 * `src/recorder.rs` — JSONL recorder
-* `src/domain.rs` — shared types
 
 ---
 
 ## License
 
-MIT (or your choice). Add a `LICENSE` file if publishing.
-
+MIT (or your choice).
 
 ---
 
 ## Author
 
-**Kukuh Tripamungkas Wicaksono (Kukuh TW)**  
-Email: kukuhtw@gmail.com  
-WhatsApp: https://wa.me/628129893706  
-LinkedIn: https://id.linkedin.com/in/kukuhtw
+**Kukuh Tripamungkas Wicaksono (Kukuh TW)**
+📧 Email: [kukuhtw@gmail.com](mailto:kukuhtw@gmail.com)
+📱 WhatsApp: [wa.me/628129893706](https://wa.me/628129893706)
+🔗 LinkedIn: [id.linkedin.com/in/kukuhtw](https://id.linkedin.com/in/kukuhtw)
 
 ---
+
 ## Disclaimer
 
 This code is for **research & testing**. Markets are risky. If you connect to **mainnet**, you accept full responsibility for all orders and outcomes. Start small, use strict limits, and monitor closely.
+
