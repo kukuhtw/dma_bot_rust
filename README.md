@@ -356,8 +356,17 @@ Each line is one `Event` (`Md`, `Sig`, `Ord`, `Exec`) — great for audits, offl
 
 MIT (or your choice). Add a `LICENSE` file if publishing.
 
+
 ---
 
+## Author
+
+**Kukuh Tripamungkas Wicaksono (Kukuh TW)**  
+Email: kukuhtw@gmail.com  
+WhatsApp: https://wa.me/628129893706  
+LinkedIn: https://id.linkedin.com/in/kukuhtw
+
+---
 ## Disclaimer
 
 This code is for **research & testing**. Markets are risky. If you connect to **mainnet**, you accept full responsibility for all orders and outcomes. Start small, use strict limits, and monitor closely.
