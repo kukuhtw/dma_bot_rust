@@ -1,6 +1,29 @@
+Here’s a tidy, polished README you can drop in:
+
+---
+
 # dma\_bot\_rust
 
-A fast, async **crypto trading engine** written in Rust. It streams multi-symbol market data (mock or Binance), runs **pluggable strategies** (mean-reversion, MA crossover, volatility breakout), enforces **risk limits**, **routes** orders across venues (mock or Binance), tracks **positions/PnL**, and exports rich **Prometheus metrics**. It can also **record every event** as JSONL for audit & backtesting.
+A fast, async **crypto trading engine** written in Rust. It streams **multi-symbol** market data (mock or Binance), runs **pluggable strategies** (mean-reversion, MA crossover, volatility breakout), enforces **risk limits**, **routes** orders across venues (mock/Binance), tracks **positions/PnL**, and exposes rich **Prometheus metrics**. It can also **record every event** as JSONL for auditing/backtesting.
+
+---
+
+## Table of Contents
+
+* [Features](#features)
+* [Architecture](#architecture)
+* [Requirements](#requirements)
+* [Environment & Presets](#environment--presets)
+* [Quick Start](#quick-start)
+* [Configuration Examples](#configuration-examples)
+* [What You’ll See](#what-youll-see)
+* [Prometheus/Grafana Cheats](#prometheusgrafana-cheats)
+* [Strategies](#strategies)
+* [Recording (JSONL)](#recording-jsonl)
+* [Troubleshooting](#troubleshooting)
+* [Project Layout](#project-layout)
+* [License](#license)
+* [Disclaimer](#disclaimer)
 
 ---
 
@@ -9,14 +32,14 @@ A fast, async **crypto trading engine** written in Rust. It streams multi-symbol
 * **Sources**
 
   * Mock tick generator (high-rate random walk)
-  * Binance Spot: **Testnet** (sandbox) or **Mainnet** (bookTicker feed + REST trading + User Data Stream)
-* **Strategies** (run any mix, N workers each)
+  * Binance Spot: **Testnet** (sandbox) or **Mainnet** (bookTicker WS + REST trading + User Data Stream)
+* **Strategies** (mix & match, N workers each)
 
   * Mean Reversion
   * Moving Average Crossover
   * Volatility Breakout
 * **Risk**: price bands, notional cap, QPS throttle
-* **SOR/Router**: multi-venue scoring & fanout
+* **SOR/Router**: multi-venue scoring & fan-out
 * **Gateways**
 
   * Mock (ACK → Filled after latency)
@@ -24,14 +47,14 @@ A fast, async **crypto trading engine** written in Rust. It streams multi-symbol
 * **Positions/PnL**: per-venue inventory, realized & unrealized PnL
 * **Observability**
 
-  * Prometheus metrics on `/:9898` (no deps)
+  * Prometheus metrics on `:9898` (built-in HTTP server)
   * Config visibility (feed/venue modes, strategies, symbols)
   * WS health (connected, reconnects, last event age)
 * **Recorder**: append-only JSONL (`Event::Md/Sig/Ord/Exec`) for audit
 
 ---
 
-## Architecture (high level)
+## Architecture
 
 ```
         feed.rs ──> MdTick ──┐
@@ -46,146 +69,101 @@ router.rs <─ Order ───────────────────�
   └──────────────────────────────────────────────┘    positions.rs (fills)
 ```
 
-All buses are Tokio channels; everything runs as async tasks.
+All buses are Tokio channels; components run as async tasks.
 
 ---
 
-## Quick start
+## Requirements
 
-### 1) Requirements
+* Rust **1.75+** (stable)
+* Linux/macOS (Windows should work, untested)
 
-* Rust 1.75+ (stable)
-* Linux/macOS (Windows should work, not tested)
+**OpenSSL build errors?** Either:
 
-**If you hit OpenSSL build errors**, either:
-
-* Install system OpenSSL dev package (e.g. `sudo apt install pkg-config libssl-dev`), **or**
+* Install system deps: `sudo apt install pkg-config libssl-dev`, **or**
 * Use `reqwest` with **rustls** (recommended) in `Cargo.toml`:
 
   ```toml
   reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
   urlencoding = "2"
-
   ```
 
-Environment presets
+---
 
-This project loads .env at startup (via dotenvy). We ship three ready-made presets:
+## Environment & Presets
 
-.env.mock – safe local simulation: mock market data + mock gateway.
+The app loads **`.env`** at startup (via `dotenvy`). Three presets are included:
 
-.env.sandbox – Binance Testnet: real WS feed + REST trading on testnet (no real money).
+* **`.env.mock`** – safe local **simulation**: mock market data + mock gateway.
+* **`.env.sandbox`** – **Binance Testnet**: real WS feed + REST trading on testnet (no real money).
+* **`.env.mainnet`** – **Binance Mainnet**: live markets & live orders. **Use with care.**
 
-.env.mainnet – Binance Mainnet: live markets & live orders. Use with care.
+**How loading works**
 
-How the loader works
+* The app reads **`.env`** in the current directory.
+* Process env vars override `.env` values, e.g.:
 
-The app automatically reads .env in the current directory.
+  ```bash
+  MAX_QPS=5 RUST_LOG=debug cargo run
+  ```
 
-Process env vars override values in .env. You can do one-off overrides like:
+**Switching presets**
 
-MAX_QPS=5 RUST_LOG=debug cargo run
-
-Quick usage (Linux/macOS)
-
-Pick one preset and make it the active .env:
-
+```bash
 # 1) MOCK (recommended for dev)
 cp .env.mock .env
 cargo run
 
 # 2) BINANCE SANDBOX (requires keys)
 cp .env.sandbox .env
-# edit .env and set BINANCE_API_KEY / BINANCE_API_SECRET
+# edit .env to set BINANCE_API_KEY / BINANCE_API_SECRET
 cargo run
 
-# 3) BINANCE MAINNET (live trading – be careful)
+# 3) BINANCE MAINNET (live trading – careful!)
 cp .env.mainnet .env
-# edit .env and set real BINANCE_API_KEY / BINANCE_API_SECRET
-# verify limits (MAX_NOTIONAL, PX_MIN/PX_MAX, MAX_QPS) before running
+# set real BINANCE_API_KEY / BINANCE_API_SECRET
+# verify MAX_NOTIONAL, PX_MIN/PX_MAX, MAX_QPS
 cargo run
+```
 
+No-copy alternatives:
 
-If you prefer not to copy files, you can source a preset for a single run:
-
-# Run with sandbox vars without touching .env
+```bash
+# Source a preset just for this run
 set -a; source .env.sandbox; set +a; cargo run
 
-
-Or symlink:
-
+# Or symlink
 ln -sf .env.mock .env        # switch to mock
 ln -sf .env.sandbox .env     # switch to sandbox
 ln -sf .env.mainnet .env     # switch to mainnet
 cargo run
+```
 
-What each preset contains
+---
 
-.env.mock
-
-FEED_MODE=mock, VENUE_MODE=mock
-
-Multiple symbols via SYMBOLS=BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT
-
-All strategies enabled by default (STRATEGIES=…) with STRATEGY_WORKERS=2
-
-Optional RECORD_FILE=events_mockup.jsonl for JSONL audit
-
-Safe for development; no external connections.
-
-.env.sandbox
-
-FEED_MODE=binance_sandbox, VENUE_MODE=binance_sandbox
-
-BINANCE_WS_URL, BINANCE_REST_URL point to testnet
-
-Set BINANCE_API_KEY and BINANCE_API_SECRET
-
-Good for end-to-end testing without real funds.
-
-.env.mainnet
-
-FEED_MODE=binance_mainnet, VENUE_MODE=binance_mainnet
-
-Set real BINANCE_API_KEY and BINANCE_API_SECRET
-
-Double-check limits: MAX_NOTIONAL, PX_MIN/PX_MAX, MAX_QPS
-
-Start with minimal risk (few symbols, 1 strategy, small QPS).
-
-### 2) Build & run (mock mode)
+## Quick Start
 
 ```bash
 cargo build
-cp .env.mock .env    # or create your own .env (see below)
+cp .env.mock .env      # or pick another preset
 cargo run
 ```
 
-You should see a line like:
+You should see:
 
 ```
 metrics listening on http://0.0.0.0:9898/ (and /metrics)
 ```
 
-### 3) Check metrics
+Check metrics:
 
 ```bash
 curl -s localhost:9898/metrics | head -n 50
 ```
 
-Look for:
-
-* `config_feed_mode`, `config_venue_mode`
-* `config_symbol{symbol="..."}`
-* `config_strategy_active{strategy="..."}`
-* Activity: `ticks_total`, `exec_reports_total{...}`
-* (Optional) per-symbol: `ticks_total_by_symbol`, `signals_total_by`
-
 ---
 
-## Configuration (.env)
-
-The app loads `.env` at startup. Three typical presets:
+## Configuration Examples
 
 ### `.env.mock` (default safe mode)
 
@@ -201,13 +179,13 @@ PX_MIN=1000
 PX_MAX=200000
 MAX_QPS=50
 
-# Strategies: single STRATEGY=... or multi STRATEGIES=a,b,c
+# Single: STRATEGY=ma_crossover
+# Multi:
 STRATEGIES=mean_reversion,ma_crossover,vol_breakout
 STRATEGY_WORKERS=2
 
 METRICS_PORT=9898
 RUST_LOG=info
-
 RECORD_FILE=events_mockup.jsonl
 ```
 
@@ -234,7 +212,7 @@ RUST_LOG=info
 RECORD_FILE=events_testnet.jsonl
 ```
 
-### `.env.mainnet` (Binance Mainnet – **at your own risk**)
+### `.env.mainnet` (Binance Mainnet — **at your own risk**)
 
 ```env
 FEED_MODE=binance_mainnet
@@ -257,57 +235,55 @@ RUST_LOG=info
 RECORD_FILE=events_mainnet.jsonl
 ```
 
-> **Safety:** Mainnet sends real orders. Start with **mock**/**sandbox**. Set conservative limits (notional, price bands, QPS).
+> **Safety:** Start with **mock** or **sandbox**. Apply conservative limits (notional, price bands, QPS).
 
 ---
 
-## What you’ll see
+## What You’ll See
 
-* **Startup log**
+**Startup log**
 
-  ```
-  startup config feed_mode=mock venue_mode=mock symbols=["BTCUSDT","ETHUSDT",...] strategies=["mean_reversion","ma_crossover","vol_breakout"] workers_per_strategy=2 ...
-  recorder enabled path=events_mockup.jsonl
-  ```
+```
+startup config feed_mode=mock venue_mode=mock symbols=["BTCUSDT","ETHUSDT",...]
+strategies=["mean_reversion","ma_crossover","vol_breakout"] workers_per_strategy=2 ...
+recorder enabled path=events_mockup.jsonl
+```
 
-* **Metrics endpoint**
+**Metrics endpoint**
 
-  ```
-  curl -s localhost:9898/metrics | egrep '^config_|^ticks_total|^exec_reports_total'
-  ```
+```bash
+curl -s localhost:9898/metrics | egrep '^config_|^ticks_total|^exec_reports_total'
+```
 
-* **Event recorder**
+**Event recorder**
 
-  ```
-  ls -l events_mockup.jsonl
-  tail -n 5 events_mockup.jsonl
-  ```
+```bash
+ls -l events_mockup.jsonl
+tail -n 5 events_mockup.jsonl
+```
 
 ---
 
-## Prometheus / Grafana cheats
+## Prometheus/Grafana Cheats
 
-* Feed coverage per symbol:
+* Feed coverage per symbol
 
   ```promql
   rate(ticks_total_by_symbol[5m])
   ```
-
-* Strategy activity per symbol:
+* Strategy activity per symbol
 
   ```promql
   rate(signals_total_by[5m]) by (strategy, symbol)
   ```
-
-* Venue fill-rate:
+* Venue fill-rate
 
   ```promql
   (rate(exec_reports_total{status="filled"}[10m])
    / ignoring(status) group_left()
    rate(exec_reports_total{status="ack"}[10m])) by (venue)
   ```
-
-* WS health (Binance):
+* WS health (Binance)
 
   * `binance_ws_connected{venue="binance"}`
   * `binance_ws_last_event_age_seconds{venue="binance"}`
@@ -318,78 +294,73 @@ RECORD_FILE=events_mainnet.jsonl
 ## Strategies
 
 * **Mean Reversion**
-  Buys when ask << rolling mean − edge; sells when bid >> mean + edge. Good for ranging markets.
-
+  Buy when ask ≪ rolling mean − edge; sell when bid ≫ mean + edge. Good in ranging markets.
 * **MA Crossover**
   Signals when fast SMA crosses slow SMA (with min edge & cooldown). Trend-following.
-
 * **Volatility Breakout**
-  Breaks out of rolling high/low ± edge with cooldown. Momentum focus.
+  Breaks out of rolling high/low ± edge with cooldown. Momentum-oriented.
 
-Enable any subset via `STRATEGIES` and scale workers via `STRATEGY_WORKERS`.
+Enable any subset via `STRATEGIES` and scale with `STRATEGY_WORKERS`.
 
 ---
 
 ## Recording (JSONL)
 
-Set `RECORD_FILE=/path/file.jsonl` to enable.
-Each line is one `Event` (`Md`, `Sig`, `Ord`, `Exec`).
-Useful for:
-
-* Audits (what happened & when)
-* Offline sims / quick backtests
-* Debugging fills vs. signals
+Set `RECORD_FILE=/path/events.jsonl` to enable.
+Each line is one `Event` (`Md`, `Sig`, `Ord`, `Exec`) — great for audits, offline sims, and debugging fills vs signals.
 
 ---
 
 ## Troubleshooting
 
-* **No `events_*.jsonl` appears**
+* **No `events_*.jsonl` file**
 
-  * Ensure `.env` is read (the code calls `dotenvy::dotenv()`).
-  * Check log: “recorder enabled path=…”
-  * Use absolute path: `RECORD_FILE=/tmp/events.jsonl`
+  * Ensure `.env` is loaded (run from repo root).
+  * Look for “recorder enabled path=…”.
+  * Try an absolute path: `RECORD_FILE=/tmp/events.jsonl`.
 
-* **Only one symbol seems to have positions**
+* **Only one symbol seems active**
 
-  * Positions run **per symbol**; verify dispatch works via metrics:
+  * Positions run per symbol. Verify via:
 
-    * `inventory_qty{symbol="...",venue="..."}`
-  * Make sure `SYMBOLS=…` has **no stray spaces**.
+    ```
+    curl -s localhost:9898/metrics | grep '^inventory_qty{symbol='
+    ```
+  * Ensure `SYMBOLS=BTCUSDT,ETHUSDT,...` has no stray spaces.
 
 * **OpenSSL build error**
 
-  * `sudo apt install pkg-config libssl-dev`, **or** use `reqwest` with `rustls-tls`.
+  * `sudo apt install pkg-config libssl-dev`, or use `reqwest` with `rustls-tls`.
 
 * **Latency histogram empty**
 
-  * You must map signal/order timestamps to ACK, then `LAT_SIG_ACK.observe(delta_ms)`. (Easy patch; ask if you want a snippet.)
+  * Add instrumentation mapping signal/order timestamps to ACK, then `LAT_SIG_ACK.observe(delta_ms)`.
 
 ---
 
-## Project layout (key files)
+## Project Layout
 
-* `src/main.rs` – task wiring, buses, spawns
-* `src/config.rs` – env parsing (modes, symbols, strategies)
-* `src/feed.rs` – mock & Binance bookTicker WS
-* `src/strategy.rs` – 3 strategies
-* `src/risk.rs` – acceptance, bands, notional, QPS
-* `src/router.rs` – scoring & fanout to venues
-* `src/gateway.rs` – mock gateway (ACK → FILLED)
-* `src/gateway_binance.rs` – REST trading + userDataStream
-* `src/positions.rs` – inventory/PnL tracker
-* `src/metrics.rs` – Prometheus registry & HTTP server
-* `src/recorder.rs` – JSONL recorder
-* `src/domain.rs` – shared types
+* `src/main.rs` — task wiring, buses, spawns
+* `src/config.rs` — env parsing (modes, symbols, strategies)
+* `src/feed.rs` — mock & Binance bookTicker WS
+* `src/strategy.rs` — 3 strategies
+* `src/risk.rs` — acceptance, bands, notional, QPS
+* `src/router.rs` — scoring & fan-out to venues
+* `src/gateway.rs` — mock gateway (ACK → FILLED)
+* `src/gateway_binance.rs` — REST trading + userDataStream
+* `src/positions.rs` — inventory/PnL tracker
+* `src/metrics.rs` — Prometheus registry & HTTP server
+* `src/recorder.rs` — JSONL recorder
+* `src/domain.rs` — shared types
 
 ---
 
 ## License
 
-MIT (or your choice). Add a `LICENSE` file if you publish.
+MIT (or your choice). Add a `LICENSE` file if publishing.
 
 ---
 
 ## Disclaimer
 
-This code is for **research & testing**. Markets are risky. If you connect to **mainnet**, you accept full responsibility for all orders and outcomes. Use limits, start tiny, and observe carefully.
+This code is for **research & testing**. Markets are risky. If you connect to **mainnet**, you accept full responsibility for all orders and outcomes. Start small, use strict limits, and monitor closely.
