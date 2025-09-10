@@ -65,7 +65,93 @@ All buses are Tokio channels; everything runs as async tasks.
   ```toml
   reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
   urlencoding = "2"
+
   ```
+
+Environment presets
+
+This project loads .env at startup (via dotenvy). We ship three ready-made presets:
+
+.env.mock – safe local simulation: mock market data + mock gateway.
+
+.env.sandbox – Binance Testnet: real WS feed + REST trading on testnet (no real money).
+
+.env.mainnet – Binance Mainnet: live markets & live orders. Use with care.
+
+How the loader works
+
+The app automatically reads .env in the current directory.
+
+Process env vars override values in .env. You can do one-off overrides like:
+
+MAX_QPS=5 RUST_LOG=debug cargo run
+
+Quick usage (Linux/macOS)
+
+Pick one preset and make it the active .env:
+
+# 1) MOCK (recommended for dev)
+cp .env.mock .env
+cargo run
+
+# 2) BINANCE SANDBOX (requires keys)
+cp .env.sandbox .env
+# edit .env and set BINANCE_API_KEY / BINANCE_API_SECRET
+cargo run
+
+# 3) BINANCE MAINNET (live trading – be careful)
+cp .env.mainnet .env
+# edit .env and set real BINANCE_API_KEY / BINANCE_API_SECRET
+# verify limits (MAX_NOTIONAL, PX_MIN/PX_MAX, MAX_QPS) before running
+cargo run
+
+
+If you prefer not to copy files, you can source a preset for a single run:
+
+# Run with sandbox vars without touching .env
+set -a; source .env.sandbox; set +a; cargo run
+
+
+Or symlink:
+
+ln -sf .env.mock .env        # switch to mock
+ln -sf .env.sandbox .env     # switch to sandbox
+ln -sf .env.mainnet .env     # switch to mainnet
+cargo run
+
+What each preset contains
+
+.env.mock
+
+FEED_MODE=mock, VENUE_MODE=mock
+
+Multiple symbols via SYMBOLS=BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT
+
+All strategies enabled by default (STRATEGIES=…) with STRATEGY_WORKERS=2
+
+Optional RECORD_FILE=events_mockup.jsonl for JSONL audit
+
+Safe for development; no external connections.
+
+.env.sandbox
+
+FEED_MODE=binance_sandbox, VENUE_MODE=binance_sandbox
+
+BINANCE_WS_URL, BINANCE_REST_URL point to testnet
+
+Set BINANCE_API_KEY and BINANCE_API_SECRET
+
+Good for end-to-end testing without real funds.
+
+.env.mainnet
+
+FEED_MODE=binance_mainnet, VENUE_MODE=binance_mainnet
+
+Set real BINANCE_API_KEY and BINANCE_API_SECRET
+
+Double-check limits: MAX_NOTIONAL, PX_MIN/PX_MAX, MAX_QPS
+
+Start with minimal risk (few symbols, 1 strategy, small QPS).
 
 ### 2) Build & run (mock mode)
 
