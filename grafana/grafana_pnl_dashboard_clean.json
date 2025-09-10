@@ -1,0 +1,205 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "overwrite": true,
+  "schemaVersion": 39,
+  "title": "DMA Bot — PnL (Clean)",
+  "uid": "dma-bot-pnl-clean",
+  "tags": [
+    "rust",
+    "prometheus",
+    "dma",
+    "pnl"
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(up, job)",
+        "refresh": 1,
+        "current": {
+          "text": "dma_bot_rust",
+          "value": "dma_bot_rust"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Realized PnL (current)",
+      "id": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "sum without(instance, symbol, venue)(pnl_realized{job=\"$job\"})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red"
+              },
+              {
+                "value": 0,
+                "color": "green"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Unrealized PnL (current)",
+      "id": 2,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "(sum without(instance, symbol, venue)(pnl_unrealized{job=\"$job\"})) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red"
+              },
+              {
+                "value": 0,
+                "color": "green"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Total PnL (realized + unrealized)",
+      "id": 3,
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "sum without(instance, symbol, venue)(pnl_realized{job=\"$job\"}) + ((sum without(instance, symbol, venue)(pnl_unrealized{job=\"$job\"})) or vector(0))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red"
+              },
+              {
+                "value": 0,
+                "color": "green"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "PnL over time (aggregated)",
+      "id": 4,
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "sum without(instance, symbol, venue)(pnl_realized{job=\"$job\"})",
+          "legendFormat": "realized",
+          "refId": "A"
+        },
+        {
+          "expr": "(sum without(instance, symbol, venue)(pnl_unrealized{job=\"$job\"})) or vector(0)",
+          "legendFormat": "unrealized",
+          "refId": "B"
+        },
+        {
+          "expr": "sum without(instance, symbol, venue)(pnl_realized{job=\"$job\"}) + ((sum without(instance, symbol, venue)(pnl_unrealized{job=\"$job\"})) or vector(0))",
+          "legendFormat": "total",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    }
+  ]
+}
