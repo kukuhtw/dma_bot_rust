@@ -5,7 +5,8 @@ DMA (Direct Market Access)
 A fast, async **crypto trading engine** written in Rust. It streams **multi-symbol** market data (mock or Binance), runs **pluggable strategies** (mean-reversion, MA crossover, volatility breakout), enforces **risk limits**, **routes** orders across venues (mock/Binance), tracks **positions/PnL**, and exposes rich **Prometheus metrics**. It can also **record every event** as JSONL for auditing/backtesting.
 
 ---
-https://github.com/kukuhtw/dma_bot_rust/blob/main/2.png
+![Alt text](https://github.com/kukuhtw/dma_bot_rust/blob/main/2.png?raw=true)
+---
 
 ## Table of Contents
 
