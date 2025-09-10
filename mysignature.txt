@@ -1,0 +1,19 @@
+/*
+=============================================================================
+Project : dma_bot_rust — low-latency async crypto trading engine in Rust
+Module  : <module_name>.rs
+Version : 0.5.0
+Author  : Kukuh Tripamungkas Wicaksono (Kukuh TW)
+Email   : kukuhtw@gmail.com
+WhatsApp: https://wa.me/628129893706
+LinkedIn: https://id.linkedin.com/in/kukuhtw
+License : MIT (see LICENSE)
+
+Summary : Streams multi-symbol market data (mock/Binance), runs pluggable
+          strategies (mean-reversion, MA crossover, vol breakout), applies
+          risk limits, routes orders across venues, tracks positions/PnL,
+          exposes Prometheus metrics, and records JSONL events.
+
+(c) 2025 Kukuh TW. All rights reserved where applicable.
+=============================================================================
+*/
