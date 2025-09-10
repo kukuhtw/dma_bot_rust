@@ -1,6 +1,3 @@
-Here’s a tidy, polished README you can drop in:
-
----
 
 # dma\_bot\_rust
 
