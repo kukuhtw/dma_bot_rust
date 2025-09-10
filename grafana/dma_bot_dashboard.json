@@ -1,0 +1,248 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "overwrite": true,
+  "schemaVersion": 39,
+  "title": "DMA Bot — Trading & PnL (Rust)",
+  "uid": "dma-bot-trading-pnl",
+  "tags": ["rust", "prometheus", "dma", "trading"],
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(up, job)",
+        "refresh": 1,
+        "current": { "text": "dma_bot_rust", "value": "dma_bot_rust" }
+      },
+      {
+        "name": "venue",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(inventory_qty{job=\"$job\"}, venue)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "symbol",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "query": "label_values(inventory_qty{job=\"$job\"}, symbol)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "rate_window",
+        "type": "custom",
+        "query": "30s,1m,5m,15m",
+        "current": { "text": "1m", "value": "1m" },
+        "options": [
+          { "text": "30s", "value": "30s" },
+          { "text": "1m", "value": "1m" },
+          { "text": "5m", "value": "5m" },
+          { "text": "15m", "value": "15m" }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Exec Reports /s (total)",
+      "id": 1,
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(exec_reports_total{job=\"$job\"}[$rate_window]))",
+          "legendFormat": "all",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "type": "stat",
+      "title": "Orders Accepted /s (ack)",
+      "id": 2,
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(exec_reports_total{job=\"$job\",status=\"ack\"}[$rate_window]))",
+          "legendFormat": "ack/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "type": "stat",
+      "title": "Fills /s",
+      "id": 3,
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(exec_reports_total{job=\"$job\",status=\"filled\"}[$rate_window]))",
+          "legendFormat": "filled/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "type": "stat",
+      "title": "Inventory Total Qty",
+      "id": 4,
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "inventory_total_qty{job=\"$job\"}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency p50/p90/p95/p99 (ms) — signal→ack",
+      "id": 5,
+      "gridPos": { "h": 8, "w": 18, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(latency_signal_to_ack_ms_bucket{job=\"$job\"}[$rate_window])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.90, sum by (le) (rate(latency_signal_to_ack_ms_bucket{job=\"$job\"}[$rate_window])))",
+          "legendFormat": "p90",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(latency_signal_to_ack_ms_bucket{job=\"$job\"}[$rate_window])))",
+          "legendFormat": "p95",
+          "refId": "C"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(latency_signal_to_ack_ms_bucket{job=\"$job\"}[$rate_window])))",
+          "legendFormat": "p99",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Exec Reports /s by Status",
+      "id": 6,
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (status) (rate(exec_reports_total{job=\"$job\"}[$rate_window]))", "legendFormat": "{{status}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "options": { "legend": { "displayMode": "list", "placement": "right" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Inventory per Venue (selected symbol)",
+      "id": 7,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum by (venue) (inventory_qty{job=\"$job\", symbol=~\"$symbol\", venue=~\"$venue\"})",
+          "legendFormat": "{{venue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "legend": { "displayMode": "list", "placement": "right" } }
+    },
+    {
+      "type": "table",
+      "title": "Inventory Snapshot (symbol × venue)",
+      "id": 8,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "inventory_qty{job=\"$job\", symbol=~\"$symbol\", venue=~\"$venue\"}", "refId": "A" }
+      ],
+      "transformations": [
+        { "id": "labelsToFields", "options": { "mode": "columns" } }
+      ],
+      "options": { "showHeader": true }
+    },
+    {
+      "type": "stat",
+      "title": "Target Health (UP ratio)",
+      "id": 9,
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "avg(up{job=\"$job\"})", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    },
+    {
+      "type": "stat",
+      "title": "Scrape Duration (avg)",
+      "id": 10,
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "avg(scrape_duration_seconds{job=\"$job\"})", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "stat",
+      "title": "Samples / scrape",
+      "id": 11,
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "avg(scrape_samples_post_metric_relabeling{job=\"$job\"})", "refId": "A" }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Config Overview",
+      "description": "Feed/venue mode & active strategies.",
+      "id": 12,
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "config_feed_mode{job=\"$job\"}", "refId": "A" },
+        { "expr": "config_venue_mode{job=\"$job\"}", "refId": "B" },
+        { "expr": "config_strategy_active{job=\"$job\"}", "refId": "C" },
+        { "expr": "config_symbol{job=\"$job\"}", "refId": "D" }
+      ],
+      "options": { "showHeader": true },
+      "transformations": [
+        { "id": "labelsToFields", "options": { "mode": "columns" } }
+      ]
+    }
+  ]
+}
